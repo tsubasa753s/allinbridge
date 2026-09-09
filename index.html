@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AllinBridge 検証ダッシュボード</title>
+<style>
+  :root{
+    --ink:#12161c; --paper:#f7f8fa; --line:#dfe3e9;
+    --up:#0a7d55; --up-bg:#e6f4ee; --down:#b3261e;
+    --key:#1c3f6e; --key-bg:#eaf0f8; --mute:#6b7684;
+    --new:#8a6d00; --new-bg:#fff8e1;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Helvetica Neue",Arial,"Hiragino Sans","Yu Gothic",sans-serif;
+    background:var(--paper);color:var(--ink);font-size:14px;line-height:1.6;padding:20px}
+  .wrap{max-width:1500px;margin:0 auto}
+  header{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;
+    padding-bottom:14px;border-bottom:2px solid var(--ink);margin-bottom:18px}
+  h1{font-size:20px;font-weight:700}
+  .sub{color:var(--mute);font-size:13px}
+
+  .loader{border:2px dashed var(--line);border-radius:6px;padding:28px;
+    text-align:center;background:#fff;margin-bottom:20px}
+  .loader.hide{display:none}
+  .loader p{margin-bottom:12px;color:var(--mute)}
+  .btn{display:inline-block;padding:10px 20px;border:1px solid var(--key);
+    background:var(--key);color:#fff;border-radius:4px;cursor:pointer;font-size:14px;font-family:inherit}
+  .btn:hover{opacity:.88}
+  .btn.ghost{background:#fff;color:var(--key)}
+
+  nav{display:flex;gap:2px;margin-bottom:16px;border-bottom:2px solid var(--line);flex-wrap:wrap}
+  nav button{padding:9px 16px;border:0;background:transparent;cursor:pointer;
+    font-size:14px;font-family:inherit;color:var(--mute);border-bottom:3px solid transparent;margin-bottom:-2px}
+  nav button.on{color:var(--key);font-weight:700;border-bottom-color:var(--key)}
+  .tab{display:none} .tab.on{display:block}
+
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;
+    padding:12px;background:#fff;border:1px solid var(--line);border-radius:6px}
+  .controls label{color:var(--mute);font-size:13px;margin-right:4px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+  .seg button{padding:7px 13px;border:0;background:#fff;cursor:pointer;font-size:13px;
+    font-family:inherit;color:var(--ink);border-right:1px solid var(--line)}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:var(--key);color:#fff}
+  select{padding:7px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px;
+    font-family:inherit;background:#fff}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-bottom:20px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:6px;padding:13px 15px}
+  .card .k{font-size:12px;color:var(--mute);margin-bottom:5px}
+  .card .v{font-size:21px;font-weight:700}
+
+  section{margin-bottom:24px}
+  h2{font-size:15px;font-weight:700;margin-bottom:10px;padding-left:9px;border-left:4px solid var(--key)}
+  h2 span{font-weight:400;color:var(--mute);font-size:13px;margin-left:8px}
+  h3{font-size:14px;font-weight:700;margin:14px 0 8px;color:var(--key)}
+
+  .scroll{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:6px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{background:var(--key);color:#fff;padding:9px 10px;text-align:right;font-weight:600;white-space:nowrap}
+  th:first-child,th.l{text-align:left}
+  td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  td:first-child,td.l{text-align:left}
+  td.w{white-space:normal;min-width:240px}
+  tbody tr:nth-child(even){background:#fafbfc}
+  tbody tr:hover{background:var(--key-bg)}
+  .rule{font-weight:700;display:inline-block;min-width:20px}
+  .rule.new{background:var(--new-bg);color:var(--new);padding:1px 6px;border-radius:3px}
+  .pos{color:var(--up);font-weight:600}
+  .neg{color:var(--down);font-weight:600}
+  .top1{background:var(--up-bg)!important}
+  .dim{color:var(--mute)}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}
+  .note{background:#fff;border:1px solid var(--line);border-radius:6px;padding:14px 16px;font-size:13px}
+  .note dt{font-weight:700;margin-top:10px}
+  .note dt:first-child{margin-top:0}
+  .note dd{color:var(--mute)}
+  footer{color:var(--mute);font-size:12px;padding-top:14px;border-top:1px solid var(--line)}
+  @media(max-width:640px){body{padding:12px} .card .v{font-size:18px} th,td{padding:7px 8px;font-size:12px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>AllinBridge 検証ダッシュボード</h1>
+  <span class="sub" id="meta">データ未読み込み</span>
+</header>
+
+<div class="loader" id="loader">
+  <p>Googleドライブの <code>_1_trades.csv</code> を選んでください</p>
+  <input type="file" id="file" accept=".csv" style="display:none">
+  <button class="btn" onclick="document.getElementById('file').click()">CSVを選ぶ</button>
+</div>
+
+<div id="main" style="display:none">
+  <nav id="nav">
+    <button data-t="dash" class="on">ダッシュボード</button>
+    <button data-t="rank">ランキング</button>
+    <button data-t="combo">組み合わせ</button>
+    <button data-t="daily">日別</button>
+    <button data-t="rules">ルール一覧</button>
+    <button data-t="manual">運用マニュアル</button>
+  </nav>
+
+  <div class="controls" id="ctl">
+    <label>期間</label>
+    <div class="seg" id="period">
+      <button data-d="0">今日</button>
+      <button data-d="1">昨日</button>
+      <button data-d="7">7日</button>
+      <button data-d="30">30日</button>
+      <button data-d="9999" class="on">全期間</button>
+    </div>
+    <label style="margin-left:10px">EA</label>
+    <div class="seg" id="ver">
+      <button data-v="all" class="on">全部</button>
+      <button data-v="v19">v19以降</button>
+    </div>
+    <label style="margin-left:10px">並び</label>
+    <select id="sortBy">
+      <option value="score">総合点</option>
+      <option value="per">1件あたりUSD</option>
+      <option value="total">累計USD</option>
+      <option value="pf">PF</option>
+      <option value="wr">勝率</option>
+    </select>
+    <button class="btn ghost" onclick="document.getElementById('file').click()" style="margin-left:auto">CSV差し替え</button>
+  </div>
+
+  <div class="tab on" id="t-dash">
+    <div class="cards" id="cards"></div>
+    <div class="grid2">
+      <section><h2>総合おすすめ 上位5</h2><div class="scroll"><table id="best"></table></div></section>
+      <section><h2>見直し候補 下位5</h2><div class="scroll"><table id="worst"></table></div></section>
+    </div>
+    <section><h2>決済理由の内訳</h2><div class="scroll"><table id="reasons"></table></div></section>
+  </div>
+
+  <div class="tab" id="t-rank">
+    <section><h2>ルール別成績<span id="rankNote"></span></h2>
+      <div class="scroll"><table id="rank"></table></div></section>
+    <div class="grid2">
+      <section><h2>1件あたりUSD 上位</h2><div class="scroll"><table id="r1"></table></div></section>
+      <section><h2>PF 上位</h2><div class="scroll"><table id="r2"></table></div></section>
+    </div>
+    <section><h2>読み方</h2><div class="note">
+      <dl>
+        <dt>1件あたりUSD</dt><dd>累計USD ÷ 参加シグナル数。ルールごとに参加回数が違うため、これが最も公平な比較指標です。</dd>
+        <dt>参加数</dt><dd>実際に取引が成立したシグナルの数。指値が刺さらず取消された分や、ルールMの見送りは含みません。</dd>
+        <dt>総合点</dt><dd>1件あたりUSD×3 ＋ PF×10 ＋ 勝率×0.3。参加回数の差を補正した総合評価です。</dd>
+        <dt>1負=何勝</dt><dd>平均的な負けを、平均的な勝ち何回で取り返せるか。小さいほど有利です。</dd>
+        <dt>黄色のルール</dt><dd>P〜Uはv18で追加した改良版。建値移動を早めて大きな負けを防ぐ設計です。</dd>
+      </dl></div></section>
+  </div>
+
+  <div class="tab" id="t-combo">
+    <section><h2>組み合わせ提案<span>総合点の高い順に足していった場合</span></h2>
+      <div class="scroll"><table id="combo"></table></div></section>
+    <section><h2>証拠金別の目安</h2><div class="scroll"><table id="cap"></table></div></section>
+    <section><h2>注意点</h2><div class="note">
+      <dl>
+        <dt>単純合算です</dt><dd>実際はルール同士が同じ場面で同時に負けるため、合計はこの通りにはなりません。</dd>
+        <dt>証拠金の計算</dt><dd>1ルール9本×0.01ロット、金4400ドル、レバレッジ1000倍で試算しています。</dd>
+        <dt>推奨</dt><dd>まずは上位3〜5つに絞り、慣れてから増やすのが安全です。</dd>
+      </dl></div></section>
+  </div>
+
+  <div class="tab" id="t-daily">
+    <section><h2>日別の推移</h2><div class="scroll"><table id="daily"></table></div></section>
+    <section><h2>ルール別 × 日別（累計USD）</h2><div class="scroll"><table id="matrix"></table></div></section>
+  </div>
+
+  <div class="tab" id="t-rules">
+    <section><h2>ルール一覧<span>EA v19 時点 / 基準点=実約定の中で最も奥の建値</span></h2>
+      <div class="scroll"><table id="rulelist"></table></div></section>
+    <section><h2>共通仕様</h2><div class="scroll"><table id="common"></table></div></section>
+  </div>
+
+  <div class="tab" id="t-manual">
+    <section><h2>運用マニュアル</h2><div class="scroll"><table id="manual"></table></div></section>
+  </div>
+
+  <footer id="foot"></footer>
+</div>
+</div>
+<script>
+const NEW_RULES = new Set(['P','Q','R','S','T','U']);
+const V19_FROM = '2026.09.08 08:53';   // v19へ差し替えた時刻
+let RAW = [];
+
+// ---- ルール定義（一覧タブで表示） ----
+const RULE_DEFS = [
+ ['A','継続','40pipsで半数 → 120pipsで残り','40pipsで建値+5','従来仕様'],
+ ['B','継続','40pipsで半数、SL変更なしで120pips','なし','建値移動しないため大負けしやすい'],
+ ['C','継続','40pipsで半数 → 120pipsで残り','40pipsで建値+5','安全と伸びのバランス型'],
+ ['D','継続','40pipsで半数 → 120pipsで残り','60pips確認後に建値+5','建値移動が遅い'],
+ ['E','継続','1.1倍で半数 → 2.0倍で全決済','1.0倍(約46pips)で建値+5','金価格に連動して水準が変わる'],
+ ['F','継続','20pipsで半数 → 120pipsで残り','20pipsで建値+5','早めに半分確保する'],
+ ['G','継続','40/80/200pipsで1/3ずつ','なし','3分割型。刻んで確保する'],
+ ['H','継続','40pipsで半数 → 100pips超で50pips幅トレール','40pipsで建値+5','伸びる場面で利益を伸ばせる'],
+ ['I','継続','75pipsで半数 → 150pipsで残り','40pipsで建値のみ(決済なし)','利確を後ろへずらした型'],
+ ['J','継続','40pipsで半数 → 120pipsで残り','40pipsで建値+20','建値を深めに置く'],
+ ['K','継続','配信者のTP1 HIT等の指示に従う','配信者のSet Be指示','価格判定なし。指示だけで動く'],
+ ['L','継続','配信者追随 + 逆行150pipsで強制決済','200pipsで半数確保','保険つき'],
+ ['M','継続','決済はCと同じ','40pipsで建値+5','トレンド逆行なら見送る。見送りも戦略'],
+ ['N','継続','40/80/150pipsで1/4ずつ → 残りオープン','80pips到達後に建値+5','4分割型'],
+ ['O','継続','100pipsで半数 → 残りオープン','40pipsで建値のみ','配信のBE40/TP100に準拠'],
+ ['P','v18で新設','100pipsで半数 → 200pipsで残り','50pipsで建値+0.1','Aの改良版'],
+ ['Q','v18で新設','120pipsで半数 → 残りは80pips幅トレール','50pipsで建値+0.1','Bの改良版'],
+ ['R','v18で新設','75pipsで半数 → 150pipsで残り','30pipsで建値+0.1','最速防御型'],
+ ['S','v18で新設','100/200pipsで1/3ずつ → 残りトレール','50pipsで建値+0.1','Lの改良版'],
+ ['T','v18で新設','80pipsで半数 → 160pipsで残り','50pipsで建値+0.1','50pips建値の標準型'],
+ ['U','v18で新設','150pipsで半数 → 残りオープン','60pipsで建値+0.1','配信のSET BE 60pips版'],
+];
+
+const COMMON_SPEC = [
+ ['エントリー','ゾーン内を5pips間隔で刻み、最大9本を指値で並べる'],
+ ['先行エントリー','「Buy now 4400」の時点で各ルール1本を成行で入れ、後からZONEシグナルと統合する'],
+ ['逆行時のSL','1分足の確定足で完全に抜けた場合のみ決済。ヒゲでは切らない'],
+ ['建値移動','各ポジションに「自分の建値+0.1pips」をブローカーのSL注文として登録 (v19から)'],
+ ['利確(TP)','半数決済後の残りに、基準価格から目標pips先のTP注文を登録 (v19から)'],
+ ['配信のSL変更','全ルールに反映される。ただし建値移動済みのグループは対象外 (v19から)'],
+ ['指値の有効期限','60分。価格が戻ってこなければ自動で取り消される'],
+ ['レート差の補正','ゾーンを上下5pips拡大、SLを5pips外側へ'],
+ ['マジック番号','A=600000 B=600001 C=600002 … O=600014 P=600015 … U=600020'],
+];
+
+const MANUAL = [
+ ['1.起動手順','MT5','デスクトップのアイコンをダブルクリック。EAは自動で復帰する'],
+ ['','','チャート左上に「AllinBridge_EA v19 [稼働中]」と出ていればOK'],
+ ['','ロガー','Windowsキー → cmd と入力してEnter'],
+ ['','','黒い画面に  cd ea_lab2  と入力してEnter'],
+ ['','','続けて  python allin_signal_logger_v4.py  と入力してEnter'],
+ ['','起動成功の目印','[OK] MT5 接続 / [OK] Telegram 接続完了 / [OK] Googleドライブへ20秒ごとに同期'],
+ ['','MT5側の確認','エキスパートタブに [INIT] v19 有効ルール=CEFGHIJKMPQRSTU と出ていれば正常'],
+ ['2.データ更新','手順','Googleドライブの _1_trades.csv を、この画面の「CSV差し替え」から読み込むだけ'],
+ ['','','スプレッドシートへの貼り付けは不要になりました'],
+ ['3.Claudeに送る','成績を見てほしい時','_1_trades.csv だけでOK'],
+ ['','エントリー漏れを調べたい','MT5ログ (ファイル → データフォルダを開く → MQL5 → Logs → 日付のファイル)'],
+ ['','配信の言い回しを学習','_4_messages.csv (C:\\Users\\tsuba\\ea_lab2\\allin_logs\\)'],
+ ['','依頼文','週次レポートお願い。①ランキング ②組み合わせ提案 ③証拠金別推奨 ④EA動作検証 ⑤気づいた点・バグ'],
+ ['4.ファイル一覧','_0_logger.csv','ロガーの生存確認。更新時刻が古ければCMDが止まっている'],
+ ['','_1_trades.csv','取引履歴。成績集計の元データ'],
+ ['','_2_status.csv','EAの稼働状況。保有本数・含み損益・証拠金維持率'],
+ ['','_3_signals.csv','受信したシグナルの履歴'],
+ ['','_9_errors.csv','SKIP・REJECT・ABANDONの記録'],
+ ['5.トラブル対処','CMDが止まる','原因は簡易編集モード。タイトルバー右クリック → 既定値 → オプション → チェックを外す'],
+ ['','','応急処置: Enterキーを押すと復帰する'],
+ ['','重複起動エラー','MT5 → ツール → グローバル変数(F3) → AllinBridge_ で始まる項目を削除'],
+ ['','','v18以降は停止済みの記録を自動で引き継ぐので発生しにくい'],
+ ['','エントリーされない','① ロガーのCMDにログが出ているか確認'],
+ ['','','② [SKIP] SUSPECT_ZONE = 配信と実勢が300pips以上離れている'],
+ ['','','③ [ABANDON] = 指値が1本も刺さらないまま価格が進んだ。正常な動作'],
+ ['','ポジションが少ない','指値は価格が戻らないと約定しない。有効期限は60分'],
+ ['','','建値移動が発動すると、そのルールの未約定の指値は取り消される'],
+ ['6.EA更新手順','手順','①保有ポジションを全決済 ②MQL5\\Experts に上書き ③MetaEditorでF7コンパイル'],
+ ['','','④チャートのEAを削除 ⑤ナビゲーターから新しいEAをドラッグ'],
+ ['','注意','新しいチャートウィンドウは開かない。既存の1枚の上で貼り替える'],
+ ['','適用の確認','[BE/SET] が出れば v19が動いている。[BE/INDIV] が出るなら古いまま'],
+ ['7.現在の設定','有効ルール','CEFGHIJKMPQRSTU (15個)'],
+ ['','1本あたりロット','0.01 / ゾーンの刻み 5pips / 最大9本'],
+ ['','指値の有効期限','60分'],
+ ['','日次SL上限','9999回 (検証中は実質無効)'],
+ ['','SL後クールダウン','0分 (検証中は無効)'],
+ ['','個別建値','建値+0.1pips をブローカーSLとして登録'],
+ ['','実運用へ移す時','日次SL上限を2回、クールダウンを20分に戻すこと'],
+ ['8.ルール枠','現状','A〜Uまで使用 (21個)。V〜Zで残り5枠'],
+ ['','使い切ったら','成績の悪いルールを無効化して枠を空ける'],
+ ['','注意','15ルールで135本・約27秒かかる。増やすほど初動が遅れる'],
+];
+
+document.getElementById('file').addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=ev=>{ RAW=parseCSV(ev.target.result); boot(); };
+  r.readAsText(f,'Shift_JIS');
+});
+
+function parseCSV(text){
+  const lines=text.replace(/\r/g,'').split('\n').filter(l=>l.trim());
+  const head=lines[0].split(','); const idx={};
+  head.forEach((h,i)=>idx[h.trim()]=i);
+  const out=[];
+  for(let i=1;i<lines.length;i++){
+    const c=lines[i].split(',');
+    if(c.length<head.length) continue;
+    const cc=parseInt(c[idx.closed_count]||0);
+    if(!(cc>0)) continue;
+    const t=c[idx.time].trim();
+    out.push({t, date:new Date(t.replace(/\./g,'/')), day:t.slice(0,10),
+      rule:c[idx.rule].trim(), sig:(c[idx.signal_id]||'').trim(),
+      count:cc, usd:parseFloat(c[idx.profit_usd]||0),
+      hold:parseFloat(c[idx.hold_min]||0), reason:(c[idx.reason]||'').trim()});
+  }
+  return out;
+}
+
+function filtered(){
+  let rows=RAW;
+  if(document.querySelector('#ver .on').dataset.v==='v19')
+    rows=rows.filter(r=>r.t>=V19_FROM);
+  const d=parseInt(document.querySelector('#period .on').dataset.d);
+  if(d>=9999) return rows;
+  const now=new Date();
+  const base=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  if(d===0) return rows.filter(r=>r.date>=base);
+  if(d===1){const y=new Date(base); y.setDate(y.getDate()-1);
+    return rows.filter(r=>r.date>=y && r.date<base);}
+  const s=new Date(base); s.setDate(s.getDate()-(d-1));
+  return rows.filter(r=>r.date>=s);
+}
+
+function agg(rows){
+  const by={};
+  rows.forEach(r=>{
+    const g=by[r.rule]||=(by[r.rule]={rule:r.rule,n:0,lots:0,usd:0,sigs:new Set(),
+      win:0,gp:0,gl:0,hold:0,max:-1e9,min:1e9,wins:0,losses:0});
+    g.n++; g.lots+=r.count; g.usd+=r.usd; g.sigs.add(r.sig); g.hold+=r.hold;
+    if(r.usd>0){g.win++; g.gp+=r.usd; g.wins++;} else {g.gl+=Math.abs(r.usd); g.losses++;}
+    if(r.usd>g.max)g.max=r.usd; if(r.usd<g.min)g.min=r.usd;
+  });
+  return Object.values(by).map(g=>{
+    const part=g.sigs.size, per=part?g.usd/part:0;
+    const pf=g.gl>0?g.gp/g.gl:(g.gp>0?99:0);
+    const wr=g.n?g.win/g.n*100:0;
+    const avgW=g.wins?g.gp/g.wins:0, avgL=g.losses?-g.gl/g.losses:0;
+    return {...g,part,per,pf,wr,avgW,avgL,
+      need:(avgW>0&&avgL<0)?Math.abs(avgL)/avgW:0,
+      ev:g.n?g.usd/g.n:0, holdAvg:g.n?g.hold/g.n:0,
+      score:per*3+pf*10+wr*0.3};
+  });
+}
+
+const f2=v=>(v>=0?'':'-')+Math.abs(v).toFixed(2);
+const cls=v=>v>0?'pos':(v<0?'neg':'dim');
+const money=v=>`<span class="${cls(v)}">${f2(v)}</span>`;
+const tag=r=>`<span class="rule ${NEW_RULES.has(r)?'new':''}">${r}</span>`;
+
+function boot(){
+  document.getElementById('loader').classList.add('hide');
+  document.getElementById('main').style.display='';
+  buildStatic();
+  render();
+}
+
+function buildStatic(){
+  document.getElementById('rulelist').innerHTML=
+    `<thead><tr><th class="l">ルール</th><th class="l">状態</th><th class="l">決済ロジック</th>
+     <th class="l">建値移動</th><th class="l">備考</th></tr></thead><tbody>`+
+    RULE_DEFS.map(d=>`<tr><td class="l">${tag(d[0])}</td><td class="l dim">${d[1]}</td>
+      <td class="l w">${d[2]}</td><td class="l">${d[3]}</td><td class="l w dim">${d[4]}</td></tr>`).join('')+'</tbody>';
+  document.getElementById('common').innerHTML=
+    `<thead><tr><th class="l">項目</th><th class="l">内容</th></tr></thead><tbody>`+
+    COMMON_SPEC.map(d=>`<tr><td class="l"><b>${d[0]}</b></td><td class="l w">${d[1]}</td></tr>`).join('')+'</tbody>';
+  document.getElementById('manual').innerHTML=
+    `<thead><tr><th class="l">カテゴリ</th><th class="l">項目</th><th class="l">内容</th></tr></thead><tbody>`+
+    MANUAL.map(d=>`<tr><td class="l"><b>${d[0]}</b></td><td class="l">${d[1]}</td>
+      <td class="l w">${d[2]}</td></tr>`).join('')+'</tbody>';
+}
+
+function render(){
+  const rows=filtered(), list=agg(rows);
+  const key=document.getElementById('sortBy').value;
+  const map={score:'score',per:'per',total:'usd',pf:'pf',wr:'wr'};
+  list.sort((a,b)=>b[map[key]]-a[map[key]]);
+
+  const tot=rows.reduce((s,r)=>s+r.usd,0);
+  const win=rows.filter(r=>r.usd>0).length;
+  const gp=rows.filter(r=>r.usd>0).reduce((s,r)=>s+r.usd,0);
+  const gl=Math.abs(rows.filter(r=>r.usd<=0).reduce((s,r)=>s+r.usd,0));
+  const sl=rows.filter(r=>r.reason.includes('SL確定'));
+  document.getElementById('cards').innerHTML=[
+    ['累計損益 USD',money(tot)],['決済回数',rows.length],
+    ['決済本数',rows.reduce((s,r)=>s+r.count,0)],
+    ['勝率',rows.length?(win/rows.length*100).toFixed(1)+'%':'-'],
+    ['PF',gl>0?(gp/gl).toFixed(2):'-'],
+    ['SL決済',sl.length+'回'],['SL損失 USD',money(sl.reduce((s,r)=>s+r.usd,0))],
+  ].map(([k,v])=>`<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+
+  const mini=(id,arr,label,fmt)=>{
+    document.getElementById(id).innerHTML=
+      `<thead><tr><th class="l">順</th><th class="l">ルール</th><th>${label}</th><th>参加</th></tr></thead><tbody>`+
+      arr.map((g,i)=>`<tr><td class="l">${i+1}</td><td class="l">${tag(g.rule)}</td>
+        <td>${fmt(g)}</td><td class="dim">${g.part}</td></tr>`).join('')+'</tbody>';
+  };
+  mini('best',list.slice(0,5),'総合点',g=>g.score.toFixed(1));
+  mini('worst',[...list].reverse().slice(0,5),'総合点',g=>g.score.toFixed(1));
+  mini('r1',[...list].sort((a,b)=>b.per-a.per).slice(0,10),'1件あたり',g=>money(g.per));
+  mini('r2',[...list].sort((a,b)=>b.pf-a.pf).slice(0,10),'PF',g=>g.pf.toFixed(2));
+
+  const best=list.length?list[0].rule:null;
+  document.getElementById('rankNote').textContent=`${list.length}ルール / ${rows.length}決済`;
+  document.getElementById('rank').innerHTML=`
+    <thead><tr><th class="l">ルール</th><th>参加</th><th>決済</th><th>本数</th>
+    <th>累計USD</th><th>1件あたり</th><th>勝率%</th><th>平均勝</th><th>平均負</th>
+    <th>最大勝</th><th>最大負</th><th>PF</th><th>期待値</th><th>1負=何勝</th>
+    <th>保有分</th><th>総合点</th></tr></thead><tbody>`+
+    list.map(g=>`<tr class="${g.rule===best?'top1':''}">
+      <td class="l">${tag(g.rule)}</td><td>${g.part}</td><td>${g.n}</td><td>${g.lots}</td>
+      <td>${money(g.usd)}</td><td>${money(g.per)}</td><td>${g.wr.toFixed(1)}</td>
+      <td>${money(g.avgW)}</td><td>${money(g.avgL)}</td>
+      <td>${money(g.max)}</td><td>${money(g.min)}</td>
+      <td>${g.pf.toFixed(2)}</td><td>${money(g.ev)}</td>
+      <td>${g.need?g.need.toFixed(2):'-'}</td>
+      <td class="dim">${g.holdAvg.toFixed(0)}</td><td><b>${g.score.toFixed(1)}</b></td>
+    </tr>`).join('')+'</tbody>';
+
+  // 組み合わせ
+  const sorted=[...list].sort((a,b)=>b.score-a.score);
+  let cp=0,ct=0,cf=0;
+  document.getElementById('combo').innerHTML=
+    `<thead><tr><th class="l">数</th><th class="l">組み合わせ</th><th>合計1件あたり</th>
+     <th>合計累計USD</th><th>平均PF</th></tr></thead><tbody>`+
+    sorted.map((g,i)=>{cp+=g.per;ct+=g.usd;cf+=g.pf;
+      return `<tr><td class="l">${i+1}</td>
+        <td class="l">${sorted.slice(0,i+1).map(x=>x.rule).join('')}</td>
+        <td>${money(cp)}</td><td>${money(ct)}</td><td>${(cf/(i+1)).toFixed(2)}</td></tr>`;
+    }).join('')+'</tbody>';
+  document.getElementById('cap').innerHTML=
+    `<thead><tr><th class="l">証拠金</th><th>推奨ルール数</th><th>必要証拠金の目安</th>
+     <th>1シグナルの最大本数</th><th class="l">備考</th></tr></thead><tbody>`+
+    [[100,3,'上位3つに絞る'],[300,5,'上位5つ'],[500,8,'上位8つ'],
+     [1000,11,'検証用に幅広く'],[3000,15,'全ルール稼働も可能']]
+    .map(([c,n,m])=>`<tr><td class="l">$${c}</td><td>${n}</td>
+      <td>${(n*9*0.01*4400/1000).toFixed(2)}</td><td>${n*9}</td>
+      <td class="l dim">${m}</td></tr>`).join('')+'</tbody>';
+
+  // 日別
+  const byDay={};
+  rows.forEach(r=>{const d=byDay[r.day]||=(byDay[r.day]={day:r.day,n:0,usd:0,win:0,gp:0,gl:0});
+    d.n++; d.usd+=r.usd; if(r.usd>0){d.win++;d.gp+=r.usd;} else d.gl+=Math.abs(r.usd);});
+  const days=Object.values(byDay).sort((a,b)=>b.day.localeCompare(a.day));
+  let cum=0; const cm={};
+  [...days].reverse().forEach(d=>{cum+=d.usd; cm[d.day]=cum;});
+  document.getElementById('daily').innerHTML=
+    `<thead><tr><th class="l">日付</th><th>決済</th><th>損益USD</th><th>勝率%</th>
+     <th>PF</th><th>累計</th></tr></thead><tbody>`+
+    days.map(d=>`<tr><td class="l">${d.day}</td><td>${d.n}</td><td>${money(d.usd)}</td>
+      <td>${(d.win/d.n*100).toFixed(0)}</td>
+      <td>${d.gl>0?(d.gp/d.gl).toFixed(2):'-'}</td><td>${money(cm[d.day])}</td></tr>`).join('')+'</tbody>';
+
+  // ルール×日別
+  const rl=list.map(g=>g.rule).sort();
+  const mx={};
+  rows.forEach(r=>{ (mx[r.day]||=(mx[r.day]={}))[r.rule]=(mx[r.day][r.rule]||0)+r.usd; });
+  const mdays=Object.keys(mx).sort().reverse();
+  document.getElementById('matrix').innerHTML=
+    `<thead><tr><th class="l">日付</th>${rl.map(r=>`<th>${r}</th>`).join('')}</tr></thead><tbody>`+
+    mdays.map(d=>`<tr><td class="l">${d}</td>`+
+      rl.map(r=>`<td>${mx[d][r]!==undefined?money(mx[d][r]):'<span class="dim">-</span>'}</td>`).join('')+
+      '</tr>').join('')+'</tbody>';
+
+  // 決済理由
+  const byR={};
+  rows.forEach(r=>{const k=r.reason.replace(/^[A-U]:/,'');
+    const g=byR[k]||=(byR[k]={r:k,n:0,usd:0}); g.n++; g.usd+=r.usd;});
+  document.getElementById('reasons').innerHTML=
+    `<thead><tr><th class="l">決済理由</th><th>回数</th><th>損益USD</th><th>平均</th></tr></thead><tbody>`+
+    Object.values(byR).sort((a,b)=>b.n-a.n).map(g=>`<tr><td class="l">${g.r}</td>
+      <td>${g.n}</td><td>${money(g.usd)}</td><td>${money(g.usd/g.n)}</td></tr>`).join('')+'</tbody>';
+
+  document.getElementById('meta').textContent=`${RAW.length}件を読み込み済み（表示 ${rows.length}件）`;
+  document.getElementById('foot').textContent=
+    RAW.length?`データ期間 ${RAW[RAW.length-1].day} 〜 ${RAW[0].day}　|　金額はすべてUSD（ドル）`:'';
+}
+
+document.querySelectorAll('#period button, #ver button').forEach(b=>{
+  b.onclick=()=>{ b.parentElement.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); render(); };
+});
+document.getElementById('sortBy').onchange=render;
+document.querySelectorAll('#nav button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('on'));
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    document.getElementById('t-'+b.dataset.t).classList.add('on');
+    const noCtl=['rules','manual'].includes(b.dataset.t);
+    document.getElementById('ctl').style.display=noCtl?'none':'';
+  };
+});
+
+
+// ---- GitHub Pages用: 同じフォルダのCSVを自動読み込み ----
+// index.html と同じ場所に _1_trades.csv を置けば、
+// ページを開くだけで最新データが表示される。
+(async function autoLoad(){
+  try{
+    const res = await fetch('_1_trades.csv?t=' + Date.now());  // キャッシュ回避
+    if(!res.ok) return;                     // ファイルが無ければ手動選択へ
+    const buf = await res.arrayBuffer();
+    let text;
+    try{ text = new TextDecoder('shift_jis').decode(buf); }
+    catch(e){ text = new TextDecoder('utf-8').decode(buf); }
+    RAW = parseCSV(text);
+    if(RAW.length){ boot(); }
+  }catch(e){ /* ローカルで開いた場合などは無視して手動選択 */ }
+})();
+
+// 5分ごとに自動で再読み込みする
+setInterval(async ()=>{
+  try{
+    const res = await fetch('_1_trades.csv?t=' + Date.now());
+    if(!res.ok) return;
+    const buf = await res.arrayBuffer();
+    let text;
+    try{ text = new TextDecoder('shift_jis').decode(buf); }
+    catch(e){ text = new TextDecoder('utf-8').decode(buf); }
+    const fresh = parseCSV(text);
+    if(fresh.length !== RAW.length){ RAW = fresh; render(); }
+  }catch(e){}
+}, 300000);
+
+</script>
+</body>
+</html>
