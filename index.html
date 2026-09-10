@@ -89,7 +89,8 @@
 </header>
 
 <div class="loader" id="loader">
-  <p>Googleドライブの <code>_1_trades.csv</code> を選んでください</p>
+  <p id="autoInfo">データを読み込んでいます…</p>
+  <p style="font-size:13px">うまくいかない場合は、下のボタンから <code>_1_trades.csv</code> を選んでください</p>
   <input type="file" id="file" accept=".csv" style="display:none">
   <button class="btn" onclick="document.getElementById('file').click()">CSVを選ぶ</button>
 </div>
@@ -488,35 +489,53 @@ document.querySelectorAll('#nav button').forEach(b=>{
 });
 
 
-// ---- GitHub Pages用: 同じフォルダのCSVを自動読み込み ----
-// index.html と同じ場所に _1_trades.csv を置けば、
+// ---- 同じフォルダのCSVを自動で読み込む ----
+// index.html と同じ場所に _1_trades.csv があれば、
 // ページを開くだけで最新データが表示される。
-(async function autoLoad(){
+// 読み込めない場合は理由を画面に出して、手動選択へ切り替える。
+async function loadCSV(silent){
+  const info = document.getElementById('autoInfo');
+  const say = m => { if(info && !silent) info.textContent = m; };
   try{
-    const res = await fetch('_1_trades.csv?t=' + Date.now());  // キャッシュ回避
-    if(!res.ok) return;                     // ファイルが無ければ手動選択へ
+    say('データを読み込んでいます…');
+    const res = await fetch('_1_trades.csv?t=' + Date.now(), {cache:'no-store'});
+    if(!res.ok){
+      say('_1_trades.csv が見つかりません（' + res.status + '）。下のボタンから選んでください。');
+      return false;
+    }
     const buf = await res.arrayBuffer();
-    let text;
-    try{ text = new TextDecoder('shift_jis').decode(buf); }
-    catch(e){ text = new TextDecoder('utf-8').decode(buf); }
-    RAW = parseCSV(text);
-    if(RAW.length){ boot(); }
-  }catch(e){ /* ローカルで開いた場合などは無視して手動選択 */ }
-})();
+    // Shift_JIS を試し、化ける場合は UTF-8 で読み直す
+    let text = '';
+    try{
+      text = new TextDecoder('shift_jis', {fatal:false}).decode(buf);
+      if(text.indexOf('rule') < 0) throw new Error('not sjis');
+    }catch(e){
+      text = new TextDecoder('utf-8').decode(buf);
+    }
+    const rows = parseCSV(text);
+    if(!rows.length){
+      say('CSVは読めましたが、決済データが0件でした。');
+      return false;
+    }
+    RAW = rows;
+    if(document.getElementById('main').style.display === 'none' ||
+       document.getElementById('loader').classList.contains('hide') === false){
+      boot();
+    }else{
+      render();
+    }
+    return true;
+  }catch(err){
+    say('自動読み込みできませんでした（' + err.message + '）。下のボタンから選んでください。');
+    return false;
+  }
+}
 
-// 5分ごとに自動で再読み込みする
-setInterval(async ()=>{
-  try{
-    const res = await fetch('_1_trades.csv?t=' + Date.now());
-    if(!res.ok) return;
-    const buf = await res.arrayBuffer();
-    let text;
-    try{ text = new TextDecoder('shift_jis').decode(buf); }
-    catch(e){ text = new TextDecoder('utf-8').decode(buf); }
-    const fresh = parseCSV(text);
-    if(fresh.length !== RAW.length){ RAW = fresh; render(); }
-  }catch(e){}
-}, 300000);
+// ページを開いた時に1回
+loadCSV(false);
+
+// 5分ごとに静かに更新する
+setInterval(()=>{ loadCSV(true); }, 300000);
 
 </script>
 </body>
